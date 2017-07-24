@@ -1,6 +1,8 @@
 #ifndef PID_H
 #define PID_H
 
+#include <limits>
+
 class PID {
 public:
   /*
@@ -16,6 +18,11 @@ public:
   double Kp;
   double Ki;
   double Kd;
+
+  double dp[3] = {1.0, 1.0, 1.0};
+  double best_err = std::numeric_limits<double>::max();
+  double err = 0;
+  int n = 0;
 
   /*
   * Constructor
@@ -41,6 +48,9 @@ public:
   * Calculate the total PID error.
   */
   double TotalError();
+
+  double TwiddleError(double p[]) const;
+  void Twiddle();
 };
 
 #endif /* PID_H */

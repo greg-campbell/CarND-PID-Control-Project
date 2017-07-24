@@ -28,14 +28,20 @@ std::string hasData(std::string s) {
   return "";
 }
 
-int main()
+int main(int argc, char *argv[])
 {
   uWS::Hub h;
 
   PID pid;
-  // TODO: Initialize the pid variable.
+  //pid.Init(atof(argv[1]), atof(argv[2]), atof(argv[3]));
+  pid.Init(0.1, 0.0, 0.6); 
+  int n_twiddle = 0;
+  //int twiddle_freq = atoi(argv[4]);
+  int twiddle_freq = 6;
+  double twiddle_frame = 0.0;
+  bool slow = false;
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &n_twiddle, &twiddle_freq, &twiddle_frame, &slow](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -51,21 +57,43 @@ int main()
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
-          /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
-          * NOTE: Feel free to play around with the throttle and speed. Maybe use
-          * another PID controller to control the speed!
-          */
+
+          pid.UpdateError(cte);
+
+          n_twiddle--;
+          twiddle_frame += cte / twiddle_freq;
+
+          //std::cout << "n_twiddle " << n_twiddle << " twiddle_frame " << twiddle_frame << std::endl;
+
+          if (n_twiddle == 0 && twiddle_frame*twiddle_frame > 1.0) {
+              std::cout << "Twiddle!" << std::endl;
+              pid.Twiddle();
+              // Casey Jones you'd better watch your speed.
+              slow = speed > 40;
+          } else if (speed > 40 && abs(twiddle_frame) > 1.5) {
+              slow = true;
+          } else if (speed < 40 || (n_twiddle == 0 && twiddle_frame*twiddle_frame <= 1.0)) {
+              // Gotta go fast!
+              slow = false;
+          }
+          if (n_twiddle <= 0) {
+              n_twiddle = twiddle_freq;
+              twiddle_frame = 0.0;
+          }
+ 
+          steer_value = pid.TotalError();
           
           // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << " Speed " << speed << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = 0.5;
+          if (slow) {
+              msgJson["throttle"] = 0;
+          }
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
